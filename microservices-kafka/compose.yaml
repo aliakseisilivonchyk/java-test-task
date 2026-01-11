@@ -1,0 +1,129 @@
+services:
+  kafka:
+    image: apache/kafka:latest
+    environment:
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092, CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - kafka-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    environment:
+      DYNAMIC_CONFIG_ENABLED: true
+    ports:
+      - "9093:8080"
+    networks:
+      - kafka-network
+    depends_on:
+      - kafka
+
+  consumer-database:
+    image: postgres
+    environment:
+      POSTGRES_USER: consumer
+      POSTGRES_PASSWORD: consumer
+      POSTGRES_DB: consumerdb
+    ports:
+      - "5432:5432"
+    networks:
+      - consumer-network
+
+  consumer:
+    build: /consumer
+    environment:
+      POSTGRES_URL: jdbc:postgresql://consumer-database:5432/consumerdb
+      POSTGRES_USERNAME: consumer
+      POSTGRES_PASSWORD: consumer
+      KAFKA_SERVER: kafka:9092
+      KAFKA_REQUEST_TOPIC: request-1,request-2
+    ports:
+      - "8080:8080"
+    networks:
+      - consumer-network
+      - kafka-network
+    depends_on:
+      - consumer-database
+      - kafka
+
+  producer-database-1:
+    image: postgres
+    environment:
+      POSTGRES_USER: producer
+      POSTGRES_PASSWORD: producer
+      POSTGRES_DB: producerdb
+    ports:
+      - "5433:5432"
+    networks:
+      - producer-network-1
+
+  producer-1:
+    build: /producer
+    environment:
+      POSTGRES_URL: jdbc:postgresql://producer-database-1:5432/producerdb
+      POSTGRES_USERNAME: producer
+      POSTGRES_PASSWORD: producer
+      KAFKA_SERVER: kafka:9092
+      KAFKA_REQUEST_TOPIC: request-1
+      KAFKA_REPLY_TOPIC: reply-1
+      KAFKA_MESSAGE_TYPE: type-1
+      KAFKA_MESSAGE_RATE: 10000
+      KAFKA_PRODUCER_ID: producer-1
+    ports:
+      - "8081:8080"
+    networks:
+      - producer-network-1
+      - kafka-network
+    depends_on:
+      - producer-database-1
+      - kafka
+
+  producer-database-2:
+    image: postgres
+    environment:
+      POSTGRES_USER: producer
+      POSTGRES_PASSWORD: producer
+      POSTGRES_DB: producerdb
+    ports:
+      - "5434:5432"
+    networks:
+      - producer-network-2
+
+  producer-2:
+    build: /producer
+    environment:
+      POSTGRES_URL: jdbc:postgresql://producer-database-2:5432/producerdb
+      POSTGRES_USERNAME: producer
+      POSTGRES_PASSWORD: producer
+      KAFKA_SERVER: kafka:9092
+      KAFKA_REQUEST_TOPIC: request-2
+      KAFKA_REPLY_TOPIC: reply-2
+      KAFKA_MESSAGE_TYPE: type-2
+      KAFKA_MESSAGE_RATE: 5000
+      KAFKA_PRODUCER_ID: producer-2
+    ports:
+      - "8082:8080"
+    networks:
+      - producer-network-2
+      - kafka-network
+    depends_on:
+      - producer-database-2
+      - kafka
+
+networks:
+  kafka-network:
+    driver: bridge
+  consumer-network:
+    driver: bridge
+  producer-network-1:
+    driver: bridge
+  producer-network-2:
+    driver: bridge
